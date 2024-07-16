@@ -39,7 +39,7 @@ Wasmtime.
   we do not want to bring it into our trusted computing base (TCB),
   because we have found its implementations to be buggy in the past,
   and bugs in libunwind would instantly turn into common
-  vulnerabilities and exposures (CVE). TODO(dhil): Link to evidence for bugs?
+  vulnerabilities and exposures (CVE). **TODO(dhil): Link to evidence for bugs?**
 
 * Fast unwinding strategy. We require unwinding to be fast enough to
   support [the guest
@@ -83,8 +83,61 @@ Wasmtime.
   + Three-way result type (Ok, Exception, Trap)
   + ExceptionRef
 
+## CLIF semantics
+[clif-semantics]: #clif-semantics
+
+* A new block type `catch` which is a landing pad for exceptions. This
+  type of block will have exactly one parameter which will be a
+  pointer to the exception value, e.g. in CLIF syntax
+```clif
+catch block123(v456: i64):
+  ...
+```
+  We disallow regular control flow edges to `catch` blocks. Meaning
+  that neither `jump`, `brif`, or `br_table` are allowed to branch
+  into a `catch` block. Instead, the control flow edges to `catch`
+  must come via a `try_call` instruction.
+
+* A new call instruction `try_call <ok_label>, <exception_label>`,
+  reminiscent of LLVM's `invoke`, where `<ok_label>` must be a regular
+  block and `<exception_label>` must be `catch` block. The semantics
+  is as follows: when `try_call` returns normally, control tranferred
+  to the block named by `<ok_label>`; when `try_call` is unwound,
+  control is tranferred to the block named by `<exception_label>`
+  (note this may happen multiple times in a two-phase exceptions
+  scenario).
+
+We do not define a CLIF instruction for throwing an
+exception. Instead, exception throwing must be done indirectly via an
+imported function (e.g. a Wasmtime builtin libcall implemented in the
+host/engine).
+
+We do not hard-wire in support for two-phase exceptions. Though, it
+should be possible to encode two-phase exceptions on top of the
+proposed constructs. For example, the producer can emit some prelude
+code that runs in the beginning of each `catch` to determine whether
+the runtime is in the search phase or unwind phase.
+
 ## Unwinding across instances
 [unwinding-instances]: #unwinding-across-instances
+
+In Wasmtime each instance is equipped with its own vm context
+(henceforth `vmctx`). Suppose we call into another instance which
+raises an exception, e.g.
+
+```
+instance_A -> instance_B -> raise exception E
+```
+
+Instance `A` calls into instance `B` which raises an exception
+`E`. Let us suppose `A` has installed an exception handler for
+`E`. Importantly, we assume the call from A to B has no intermediate
+host frames. Now what happens? Instance `B` initiates the unwind,
+which is eventually caught by instance `A`. Meanwhile the problem is
+that `A` has a different `vmctx` from `B`... **TODO(dhil): on
+reflection, I don't understand the problem, why is `B`'s `vmctx` ever
+necessary at the handling site? Surely, `A` has sufficient information
+to handle `E`?**
 
 ## Unwinding across host frames
 [unwinding-hosts]: #unwinding-across-host-frames
@@ -116,5 +169,10 @@ to consider:
 # Open questions
 [open-questions]: #open-questions
 
-* We must carefully consider interactions between stack unwinding and
-  nested host-wasm calls, e.g. `host -> wasm -> host -> wasm`.
+* We need to decide whether `catch` blocks in CLIF are allowed to use
+  values from dominating blocks.
+
+# References
+[references]: #references
+
+* [Exception handling in LLVM](https://llvm.org/docs/ExceptionHandling.html)
