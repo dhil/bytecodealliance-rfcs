@@ -83,8 +83,10 @@ Wasmtime.
   + Three-way result type (Ok, Exception, Trap)
   + ExceptionRef
 
-## CLIF semantics
+## CLIF extensions
 [clif-semantics]: #clif-semantics
+
+We propose two extensions to CLIF.
 
 * A new block type `catch` which is a landing pad for exceptions. This
   type of block will have exactly one parameter which will be a
