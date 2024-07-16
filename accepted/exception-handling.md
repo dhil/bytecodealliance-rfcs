@@ -58,12 +58,15 @@ Wasmtime.
   SEH. Though, we believe a MVP capable of recovering the `vmctx`
   register should suffice for critical use-cases.
 
-* Leveraging unwind info.
-
 # Non-requirements
 [non-requirements]: #non-requirements
 
-* No support for the legacy exception handling revision.
+* No support for the legacy exception handling
+  revision. Justification: the legacy revision is being phased out.
+
+* No support for unwinding across host frames. Justification:
+  unwinding across host frames would require implementing a full DWARF
+  unwinder or equivalent.
 
 # Proposal sketch
 [proposal]: #proposal
@@ -79,6 +82,36 @@ Wasmtime.
 * Changes to the embedder API
   + Three-way result type (Ok, Exception, Trap)
   + ExceptionRef
+
+## Unwinding across instances
+[unwinding-instances]: #unwinding-across-instances
+
+## Unwinding across host frames
+[unwinding-hosts]: #unwinding-across-host-frames
+
+As stated in the [non-requirements](:non-requirements) section we do
+not plan to support unwinding across host frames. However, to
+gracefully handle exceptions that attempt to cross wasm-host boundary
+we propose to have our host-to-wasm trampoline catch any Wasm-thrown
+exceptions and return them via a three-way result type.
+
+Similarly, we will do not plan to supporting raising Wasm exceptions
+directly in host code. Instead, we envisage a host function supply an
+element of the exception type as an argument, which the wasm-to-host
+trampolines will reify as a genuine exception and raise inside the
+Wasm code.
+
+For the design of the three-way result type there are multiple options
+to consider:
+
+* A genuine three-parameter result type capturing the three ways in
+  which a Wasm program can terminate, e.g. `Result<Success, Exception,
+  Trap>`.
+* A nested result type, e.g. `Result<Result<Success, Exception>,
+  Trap>` to remain compatible with Rust's `?` operator.
+* Or continue to use `Result<Success, anyhow::Error>` and allow
+  callers to try to downcast the `anyhow::Error` to either a trap or
+  an exception as needed.
 
 # Open questions
 [open-questions]: #open-questions
