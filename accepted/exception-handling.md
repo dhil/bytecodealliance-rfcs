@@ -55,8 +55,9 @@ Wasmtime.
   suport DWARF or frame pointers, e.g. `perf`. Furthermore, in
   Cranelift `cg_clif` should be extended with capabilities to leverage
   the unwind info support to emit appropriate DWARF or Windows
-  SEH. Though, we believe a MVP capable of recovering the `vmctx`
-  register should suffice for critical use-cases.
+  Structured Exception Handling. Though, we believe a MVP capable of
+  recovering the `vmctx` register should suffice for critical
+  use-cases.
 
 # Non-requirements
 [non-requirements]: #non-requirements
@@ -71,17 +72,8 @@ Wasmtime.
 # Proposal sketch
 [proposal]: #proposal
 
-* Implementation alternatives
-  + Side table-based implementation
-  + Calling convention-based implementation
-  + Bespoke (subset) DWARF unwinder
-* Changes to Wasmtime
-  + Mapping from PCs to modules for unwinding
-* Changes to cranelift
-  + Bjorn3's patch?
-* Changes to the embedder API
-  + Three-way result type (Ok, Exception, Trap)
-  + ExceptionRef
+This section outlines the technical details of the proposal for
+implementing support for exception handling in Wasmtime and Cranelift.
 
 ## CLIF extensions
 [clif-semantics]: #clif-semantics
@@ -119,6 +111,22 @@ should be possible to encode two-phase exceptions on top of the
 proposed constructs. For example, the producer can emit some prelude
 code that runs in the beginning of each `catch` to determine whether
 the runtime is in the search phase or unwind phase.
+
+## Implementation strategies
+
+We identify three feasible implementation strategies for stack
+unwinding.
+
+1. Side table: we can store information about which parts of the code
+can raise exceptions and where their respective handlers are located
+in a bespoke runtime-managed data structure.
+
+2. Calling convention: we can extend the calling convention to
+propagate exception information between function calls.
+
+3. DWARF unwinder: we can implement a bespoke unwinder for a subset of
+DWARF. This subset should cover the set of special-purpose registers
+used by Wasmtime.
 
 ## Unwinding across instances
 [unwinding-instances]: #unwinding-across-instances
@@ -178,3 +186,18 @@ to consider:
 [references]: #references
 
 * [Exception handling in LLVM](https://llvm.org/docs/ExceptionHandling.html)
+
+
+# Old stuff, to be removed
+
+* Implementation alternatives
+  + Side table-based implementation
+  + Calling convention-based implementation
+  + Bespoke (subset) DWARF unwinder
+* Changes to Wasmtime
+  + Mapping from PCs to modules for unwinding
+* Changes to cranelift
+  + Bjorn3's patch?
+* Changes to the embedder API
+  + Three-way result type (Ok, Exception, Trap)
+  + ExceptionRef
