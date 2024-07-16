@@ -38,8 +38,7 @@ Wasmtime.
   determining and unwinding call chains in ELF programs. Nonetheless,
   we do not want to bring it into our trusted computing base (TCB),
   because we have found its implementations to be buggy in the past,
-  and bugs in libunwind would instantly turn into common
-  vulnerabilities and exposures (CVE). **TODO(dhil): Link to evidence for bugs?**
+  and such bugs can easily compromise the integrity of Wasmtime. **TODO(dhil): Link to evidence for bugs?**
 
 * Fast unwinding strategy. We require unwinding to be fast enough to
   support [the guest
@@ -54,8 +53,8 @@ Wasmtime.
   strategy, Wasmtime must continue to work with system profilers which
   suport DWARF or frame pointers, e.g. `perf`. Furthermore, in
   Cranelift `cg_clif` should be extended with capabilities to leverage
-  the unwind info support to emit appropriate DWARF or Windows
-  Structured Exception Handling. Though, we believe a MVP capable of
+  the unwind info support to emit appropriate DWARF, Windows
+  Structured Exception Handling, and so forth. Though, we believe a MVP capable of
   recovering the `vmctx` register should suffice for critical
   use-cases.
 
