@@ -169,11 +169,28 @@ ret
 
 We reckon this approach is relatively low overhead, and it something
 we can confidently implement correctly more quickly than the side
-table or DWARF unwinder approach. Adopting this approach would allow
+table or DWARF unwinder strategies. Adopting this strategy would allow
 us to focus on the challenges of retrofitting exception support onto
 CLIF and extending the Wasmtime public API first. After the fact, we
 can focus the effort on getting all the nitty-gritty runtime bits for
 interpreting unwind info correct.
+
+## Unwinding across instances
+[unwinding-instances]: #unwinding-across-instances
+
+The calling convention strategy lets us aptly support unwinding across
+instances, i.e. scenarios such as
+
+```
+instance_A -> instance_B -> raise exception E
+```
+
+where instance `A` has installed an exception handler for `E` and
+calls into instance `B` which raises the exception `E`.
+
+To support unwinding across instances we plan to use a callee-saved
+register to hold (a pointer to) the exception `E`. This way instance A
+can readily get hold of the exception.
 
 ## Unwinding across host frames
 [unwinding-hosts]: #unwinding-across-host-frames
