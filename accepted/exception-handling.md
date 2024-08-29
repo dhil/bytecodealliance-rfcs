@@ -175,27 +175,6 @@ CLIF and extending the Wasmtime public API first. After the fact, we
 can focus the effort on getting all the nitty-gritty runtime bits for
 interpreting unwind info correct.
 
-## Unwinding across instances
-[unwinding-instances]: #unwinding-across-instances
-
-In Wasmtime each instance is equipped with its own vm context
-(henceforth `vmctx`). Suppose we call into another instance which
-raises an exception, e.g.
-
-```
-instance_A -> instance_B -> raise exception E
-```
-
-Instance `A` calls into instance `B` which raises an exception
-`E`. Let us suppose `A` has installed an exception handler for
-`E`. Importantly, we assume the call from A to B has no intermediate
-host frames. Now what happens? Instance `B` initiates the unwind,
-which is eventually caught by instance `A`. Meanwhile the problem is
-that `A` has a different `vmctx` from `B`... **TODO(dhil): on
-reflection, I don't understand the problem, why is `B`'s `vmctx` ever
-necessary at the handling site? Surely, `A` has sufficient information
-to handle `E`?**
-
 ## Unwinding across host frames
 [unwinding-hosts]: #unwinding-across-host-frames
 
