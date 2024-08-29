@@ -16,29 +16,36 @@ of exception handling in the wild at the moment:
 * The official W3C WebAssembly exception handling revised proposal;
 * and, the legacy exception handling revision.
 
-The revised proposal has reached consensus, which was backed by a
-summarily approval by the CG at the in-person meeting in Munich in
-October 2023. The proposal is currently in phase 3 with
-implementations taking shape in SpiderMonkey and V8. On the toolchain
-side, the feature is wanted by, at least, Kotlin and OCaml, though
-there may be more toolchains wanting this feature that I am unaware
-of. Nonetheless, the proposal is expected to standardised in its
-current form in a not too distant future. Thus to remain standards
-compliant, we will need to eventually implement the proposal in
-Wasmtime.
+The revised proposal was advanced to phase 4 during [a community group
+meeting in
+July](https://github.com/WebAssembly/meetings/blob/main/main/2024/CG-07-16.md). Support
+for exception handling is (at least) of interest to C++, Kotlin, and
+OCaml toolchains. The proposal is also a prerequisite for the [stack
+switching
+proposal](https://github.com/WebAssembly/stack-switching/blob/main/proposals/stack-switching/Explainer.md)
+which plans to use exceptions to finalise stacks. Nonetheless, to
+remain standard compliant, we will eventually have to implement the
+exception handling proposal in Wasmtime.
 
 # Requirements
 [requirements]: #requirements
 
-* Exception handling support should be a zero-cost feature, i.e. the
-  implementation must not affect the run-time performance (execution
-  speed, memory usage, etc) of programs that do not use the feature.
+* In its end state exception handling should be a zero-cost feature,
+  i.e. the implementation must not affect the run-time performance
+  (execution speed, memory usage, etc) of programs that do not use the
+  feature. However, in the interim we are willing to relax this
+  requirement to a "near zero-cost" such that we can use a simple
+  implementation to quickly enable users to use this feature.
 
 * No dependence on `libunwind`. This library provides a C API for
   determining and unwinding call chains in ELF programs. Nonetheless,
   we do not want to bring it into our trusted computing base (TCB),
   because we have found its implementations to be buggy in the past,
-  and such bugs can easily compromise the integrity of Wasmtime. **TODO(dhil): Link to evidence for bugs?**
+  and such bugs can easily compromise the integrity of Wasmtime (some
+  past `libunwind` bugs:
+  [#2808](https://github.com/bytecodealliance/wasmtime/issues/2808),
+  [#3256](https://github.com/bytecodealliance/wasmtime/issues/3256),
+  [#7997](https://github.com/bytecodealliance/wasmtime/issues/7997)).
 
 * Fast unwinding strategy. We require unwinding to be fast enough to
   support [the guest
@@ -54,9 +61,9 @@ Wasmtime.
   suport DWARF or frame pointers, e.g. `perf`. Furthermore, in
   Cranelift `cg_clif` should be extended with capabilities to leverage
   the unwind info support to emit appropriate DWARF, Windows
-  Structured Exception Handling, and so forth. Though, we believe a MVP capable of
-  recovering the `vmctx` register should suffice for critical
-  use-cases.
+  Structured Exception Handling, and so forth. Though, we believe a
+  MVP capable of recovering the `vmctx` register should suffice for
+  critical use-cases.
 
 # Non-requirements
 [non-requirements]: #non-requirements
@@ -66,7 +73,10 @@ Wasmtime.
 
 * No support for unwinding across host frames. Justification:
   unwinding across host frames would require implementing a full DWARF
-  unwinder or equivalent.
+  unwinder or equivalent. Note: this just not preclude throwing and
+  catching exceptions when there is a host frame present in the call
+  stack, as we can catch and rethrow exceptions in trampolines on the
+  boundary.
 
 # Proposal sketch
 [proposal]: #proposal
@@ -81,7 +91,8 @@ We propose two extensions to CLIF.
 
 * A new block type `catch` which is a landing pad for exceptions. This
   type of block will have exactly one parameter which will be a
-  pointer to the exception value, e.g. in CLIF syntax
+  pointer-sized integer (morally the exception value), e.g. in CLIF
+  syntax
 ```clif
 catch block123(v456: i64):
   ...
@@ -93,12 +104,16 @@ catch block123(v456: i64):
 
 * A new call instruction `try_call <ok_label>, <exception_label>`,
   reminiscent of LLVM's `invoke`, where `<ok_label>` must be a regular
-  block and `<exception_label>` must be `catch` block. The semantics
-  is as follows: when `try_call` returns normally, control tranferred
-  to the block named by `<ok_label>`; when `try_call` is unwound,
-  control is tranferred to the block named by `<exception_label>`
-  (note this may happen multiple times in a two-phase exceptions
-  scenario).
+  block and `<exception_label>` must be `catch` block. The block
+  parameters of `<ok_label>` must match the return types of the called
+  function. The semantics is as follows: when `try_call` returns
+  normally, control tranferred to the block named by `<ok_label>`;
+  when `try_call` is unwound, control is tranferred to the block named
+  by `<exception_label>` (note this may happen multiple times in a
+  two-phase exceptions scenario).
+
+* Potentially we may also want a `try_call_indirect <ok_label>,
+  <exception_label>` for indirect calls.
 
 We do not define a CLIF instruction for throwing an
 exception. Instead, exception throwing must be done indirectly via an
@@ -113,7 +128,7 @@ the runtime is in the search phase or unwind phase.
 
 ## Implementation strategies
 
-We identify three feasible implementation strategies for stack
+There are at least three feasible implementation strategies for stack
 unwinding.
 
 1. Side table: we can store information about which parts of the code
@@ -126,6 +141,39 @@ propagate exception information between function calls.
 3. DWARF unwinder: we can implement a bespoke unwinder for a subset of
 DWARF. This subset should cover the set of special-purpose registers
 used by Wasmtime.
+
+### Incremental strategy for zero-cost exceptions
+
+We are interested in landing this feature in a reasonably timely
+manner to enable producers to use exception handling and allow
+dependent proposal to run experiments on top of Wasmtime. Therefore we
+propose to start by implementing exceptions using calling convention
+based strategy. The strategy we have in mind is not zero-cost, but
+possibly cheap enough that is acceptable in the interim.
+
+Concretely, we propose to implement non-zero cost exceptions by using
+flags (e.g. the overflow flag) to determine whether a call returned
+through a throw or an ordinary return instruction. Put into code:
+
+```
+call 0x12345678 # exceptional return sets the flag
+jo $exception_branch
+```
+
+Before returning normally any function must clear the flag, e.g.
+
+```
+test al, al
+ret
+```
+
+We reckon this approach is relatively low overhead, and it something
+we can confidently implement correctly more quickly than the side
+table or DWARF unwinder approach. Adopting this approach would allow
+us to focus on the challenges of retrofitting exception support onto
+CLIF and extending the Wasmtime public API first. After the fact, we
+can focus the effort on getting all the nitty-gritty runtime bits for
+interpreting unwind info correct.
 
 ## Unwinding across instances
 [unwinding-instances]: #unwinding-across-instances
@@ -180,6 +228,8 @@ to consider:
 
 * We need to decide whether `catch` blocks in CLIF are allowed to use
   values from dominating blocks.
+* How should we represent three-way results in the Wasmtime public
+  API?
 
 # References
 [references]: #references
