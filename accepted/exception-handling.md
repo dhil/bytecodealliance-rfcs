@@ -189,8 +189,8 @@ where instance `A` has installed an exception handler for `E` and
 calls into instance `B` which raises the exception `E`.
 
 To support unwinding across instances we plan to use a callee-saved
-register to hold (a pointer to) the exception `E`. This way instance A
-can readily get hold of the exception.
+register to hold (a pointer to) the exception `E`. This way instance
+`A` can readily get hold of the exception data.
 
 ## Unwinding across host frames
 [unwinding-hosts]: #unwinding-across-host-frames
