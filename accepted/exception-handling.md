@@ -231,18 +231,10 @@ to consider:
 [references]: #references
 
 * [Exception handling in LLVM](https://llvm.org/docs/ExceptionHandling.html)
-
-
-# Old stuff, to be removed
-
-* Implementation alternatives
-  + Side table-based implementation
-  + Calling convention-based implementation
-  + Bespoke (subset) DWARF unwinder
-* Changes to Wasmtime
-  + Mapping from PCs to modules for unwinding
-* Changes to cranelift
-  + Bjorn3's patch?
-* Changes to the embedder API
-  + Three-way result type (Ok, Exception, Trap)
-  + ExceptionRef
+* [Itanium C++ exception handling ABI](https://itanium-cxx-abi.github.io/cxx-abi/abi-eh.html)
+* [Framehop stack unwinder](https://github.com/mstange/framehop)
+* [Reliable and fast DWARF-based stack uwinding](https://inria.hal.science/hal-02297690/document)
+* [How fast can CFI/EXIDX-based stack unwinding be?](https://blog.mozilla.org/jseward/2013/08/29/how-fast-can-cfiexidx-based-stack-unwinding-be/)
+* [Unwinding stack by hand with frame pointers and ORC](https://blogs.oracle.com/linux/post/unwinding-stack-frame-pointers-and-orc)
+* [The return of frame pointers](https://www.brendangregg.com/blog/2024-03-17/the-return-of-the-frame-pointers.html)
+* [The SFrame format](https://sourceware.org/binutils/docs/sframe-spec.html)
